@@ -4,7 +4,7 @@ import sys
 import os
 from colorama import Fore, Back, Style
 
-with open('test_cases.json', 'r') as file:
+with open('test_cases_sample.json', 'r') as file:
     test_cases = json.load(file)
 
     # create test file
@@ -30,6 +30,13 @@ with open('test_cases.json', 'r') as file:
         for bucket in buckets:
             print("Testing against bucket '{}'".format(bucket))
             if 'resources' in iam_infos and hasattr(iam_infos, 'items'):
+                for default_resource in resources:
+                    if hasattr(iam_infos['resources'], default_resource) is not True:
+                        iam_infos['resources'][default_resource] = {
+                            "type": "folder",
+                            "actions": default_expected_permissions
+                        }
+
                 for resource, resource_infos in iam_infos['resources'].items():
                     print("  - Testing resource '{}' of type {}".format(resource, resource_infos['type']))
 
@@ -80,7 +87,7 @@ with open('test_cases.json', 'r') as file:
                                     s3_client.put_object(
                                         Bucket=bucket,
                                         Key=test_file_path,
-                                        Body=test_file_path
+                                        Body=test_file_name
                                     )
                                     test_result = True
                                 except Exception as e:
@@ -121,7 +128,8 @@ with open('test_cases.json', 'r') as file:
                                             Bucket=bucket,
                                             Key=test_file_path,
                                             PartNumber=1,
-                                            UploadId=MU['UploadId']
+                                            UploadId=MU['UploadId'],
+                                            Body=test_file_name
                                         )
 
                                         s3_client.complete_multipart_upload(
