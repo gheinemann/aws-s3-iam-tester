@@ -1,0 +1,46 @@
+{
+  "buckets": [
+    "preprod_bucket", "prod_bucket"
+  ],
+  "resources": [
+    "folder_a",
+    "folder_b",
+    "folder_c"
+  ],
+  "default_expected_permissions": {
+    "ListBucket": false,
+    "GetObject": false,
+    "PutObject": false,
+    "DeleteObject": false,
+    "MultipartUpload": false,
+    "AbortMultipartUpload": false
+  },
+  "iams": {
+    "my_iam": {
+      "key": "my_iam_aws_access_key_id",
+      "secret": "my_iam_aws_secret_access_key",
+      "allowed_buckets": [
+        "bucket_preprod"
+      ],
+      "resources": {
+        "folder_a": {
+          "type": "folder",
+          "actions": {
+            "ListBucket": true,
+            "PutObject": true,
+            "GetObject": true,
+            "MultipartUpload": false,
+            "AbortMultipartUpload": false
+          }
+        },
+        "folder_b": {
+          "type": "folder",
+          "actions": {
+            "ListBucket": true
+          }
+        }
+      }
+    }
+  }
+}
+
