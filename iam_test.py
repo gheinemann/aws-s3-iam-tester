@@ -4,7 +4,7 @@ import sys
 import os
 from colorama import Fore, Back, Style
 
-with open('test_cases_sample.json', 'r') as file:
+with open('test_cases.json', 'r') as file:
     test_cases = json.load(file)
 
     # create test file
@@ -31,10 +31,15 @@ with open('test_cases_sample.json', 'r') as file:
             print("Testing against bucket '{}'".format(bucket))
             if 'resources' in iam_infos and hasattr(iam_infos, 'items'):
                 for default_resource in resources:
-                    if hasattr(iam_infos['resources'], default_resource) is not True:
+                    iam_resources_keys = []
+
+                    if 'resources' in iam_infos:
+                        iam_resources_keys = iam_infos['resources'].keys()
+
+                    if default_resource not in iam_resources_keys:
                         iam_infos['resources'][default_resource] = {
                             "type": "folder",
-                            "actions": default_expected_permissions
+                            "actions": default_expected_permissions.copy()
                         }
 
                 for resource, resource_infos in iam_infos['resources'].items():
