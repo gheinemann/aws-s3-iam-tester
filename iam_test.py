@@ -17,6 +17,10 @@ with open('test_cases.json', 'r') as file:
     default_expected_permissions = test_cases['default_expected_permissions']
     iams = test_cases['iams']
 
+    config_run_all_cases = False
+
+    report = []
+
     for iam, iam_infos in iams.items():
         print("{}### Testing IAM {} ###{}".format(Style.BRIGHT, iam, Style.NORMAL))
         print("{}Setting up IAM S3 client ...{}".format(Style.DIM, Style.NORMAL))
@@ -30,17 +34,18 @@ with open('test_cases.json', 'r') as file:
         for bucket in buckets:
             print("Testing against bucket '{}'".format(bucket))
             if 'resources' in iam_infos and hasattr(iam_infos, 'items'):
-                for default_resource in resources:
-                    iam_resources_keys = []
+                if config_run_all_cases:
+                    for default_resource in resources:
+                        iam_resources_keys = []
 
-                    if 'resources' in iam_infos:
-                        iam_resources_keys = iam_infos['resources'].keys()
+                        if 'resources' in iam_infos:
+                            iam_resources_keys = iam_infos['resources'].keys()
 
-                    if default_resource not in iam_resources_keys:
-                        iam_infos['resources'][default_resource] = {
-                            "type": "folder",
-                            "actions": default_expected_permissions.copy()
-                        }
+                        if default_resource not in iam_resources_keys:
+                            iam_infos['resources'][default_resource] = {
+                                "type": "folder",
+                                "actions": default_expected_permissions.copy()
+                            }
 
                 for resource, resource_infos in iam_infos['resources'].items():
                     print("  - Testing resource '{}' of type {}".format(resource, resource_infos['type']))
@@ -59,19 +64,14 @@ with open('test_cases.json', 'r') as file:
 
                     if hasattr(tmp_actions, 'items'):
                         for action, expected_result in tmp_actions.items():
-                            print("    - Expect action '{}' on resource '{}' to be {}{}{}".format(
-                                action,
-                                resource,
-                                Style.BRIGHT,
-                                'ALLOWED' if expected_result is True else 'NOT ALLOWED',
-                                Style.NORMAL
-                            ))
                             if resource_infos['type'] == "folder":
                                 test_file_path = resource + "/" + test_file_name
                             else:
                                 test_file_path = resource
                             test_result = False
-                            error_msg = ""
+                            main_error_msg = ""
+                            secondary_error_msg = ""
+                            exception_type = ""
 
                             # handles ListBucket
                             if action == 'ListBucket':
@@ -81,11 +81,8 @@ with open('test_cases.json', 'r') as file:
                                     )
                                     test_result = True
                                 except Exception as e:
-                                    error_msg = "{}{} ({}){}".format(
-                                        Fore.RED,
-                                        e,
-                                        sys.exc_info()[0],
-                                        Fore.RESET)
+                                    main_error_msg = e
+                                    exception_type = type(e)
                             # handles PutObject
                             if action == 'PutObject':
                                 try:
@@ -96,12 +93,10 @@ with open('test_cases.json', 'r') as file:
                                     )
                                     test_result = True
                                 except Exception as e:
-                                    error_msg = "{}{} ({} - {}){}".format(
-                                        Fore.RED,
-                                        e,
-                                        test_file_path,
-                                        sys.exc_info()[0],
-                                        Fore.RESET)
+                                    main_error_msg = e
+                                    secondary_error_msg = test_file_path
+                                    exception_type = type(e)
+
                             # handles GetObject
                             if action == 'GetObject':
                                 try:
@@ -111,12 +106,9 @@ with open('test_cases.json', 'r') as file:
                                     )
                                     test_result = True
                                 except Exception as e:
-                                    error_msg = "{}{} ({} - {}){}".format(
-                                        Fore.RED,
-                                        e,
-                                        test_file_path,
-                                        sys.exc_info()[0],
-                                        Fore.RESET)
+                                    main_error_msg = e
+                                    secondary_error_msg = test_file_path
+                                    exception_type = type(e)
 
                             # handles MultipartUpload
                             if action == 'MultipartUpload':
@@ -153,12 +145,9 @@ with open('test_cases.json', 'r') as file:
                                         test_result = True
 
                                 except Exception as e:
-                                    error_msg = "{}{} ({} - {}){}".format(
-                                        Fore.RED,
-                                        e,
-                                        test_file_path,
-                                        sys.exc_info()[0],
-                                        Fore.RESET)
+                                    main_error_msg = e
+                                    secondary_error_msg = test_file_path
+                                    exception_type = type(e)
 
                             # handles AbortMultipartUpload
                             if action == 'AbortMultipartUpload':
@@ -179,12 +168,9 @@ with open('test_cases.json', 'r') as file:
                                         test_result = True
 
                                 except Exception as e:
-                                    error_msg = "{}{} ({} - {}){}".format(
-                                        Fore.RED,
-                                        e,
-                                        test_file_path,
-                                        sys.exc_info()[0],
-                                        Fore.RESET)
+                                    main_error_msg = e
+                                    secondary_error_msg = test_file_path
+                                    exception_type = type(e)
 
                             color = Fore.GREEN if test_result == expected_result else Fore.RED
                             result = "OK" if test_result == expected_result else "KO, {}{}{} expected".format(
@@ -192,9 +178,19 @@ with open('test_cases.json', 'r') as file:
                                 expected_result,
                                 Style.NORMAL
                             )
-                            if test_result != expected_result and error_msg is not "":
-                                result = "{} : {}".format(result, error_msg)
-                            print(color + "        => {}".format(result) + Style.RESET_ALL)
+                            if test_result != expected_result:
+                                report_entry = {
+                                    "iam": iam,
+                                    "bucket": bucket,
+                                    "resource": resource,
+                                    "action": action,
+                                    "expected_result": expected_result,
+                                    "test_result": test_result,
+                                    "main_error_msg": "{}".format(main_error_msg),
+                                    "secondary_error_msg": secondary_error_msg,
+                                    "exception_type": "{}".format(exception_type)
+                                }
+                                report.append(report_entry)
                     else:
                         print("No 'actions' index found on '{}' resource, or wrong object type (Dict needed)".format(resource))
             else:
@@ -205,4 +201,19 @@ with open('test_cases.json', 'r') as file:
     if os.path.exists(test_file_name):
         os.remove(test_file_name)
 
-    # test report
+    # print report
+    tpl_report_entry = "IAM: {} / bucket: {} / resource: {} / action: {} / expected result: {} / test result: {}" \
+                       " / main error: {} / add infos: {} / error type: {}"
+    print("Printing report ...")
+    for entry in report:
+        print(tpl_report_entry.format(
+            Style.BRIGHT + entry['iam'] + Style.NORMAL,
+            Style.BRIGHT + entry['bucket'] + Style.NORMAL,
+            Style.BRIGHT + entry['resource'] + Style.NORMAL,
+            Style.BRIGHT + entry['action'] + Style.NORMAL,
+            Style.BRIGHT + ('ALLOWED' if entry['expected_result'] is True else 'NOT ALLOWED') + Style.NORMAL,
+            Fore.RED + ('ALLOWED' if entry['test_result'] is True else 'NOT ALLOWED') + Fore.RESET,
+            Style.BRIGHT + entry['main_error_msg'] + Style.NORMAL,
+            Style.BRIGHT + entry['secondary_error_msg'] + Style.NORMAL,
+            Style.BRIGHT + entry['exception_type'] + Style.NORMAL
+        ))
